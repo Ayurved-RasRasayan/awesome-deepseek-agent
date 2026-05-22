@@ -1,7 +1,7 @@
 FROM node:20-bookworm-slim
 
 RUN apt-get update && \
-    apt-get install -y openjdk-17-jdk wget unzip && \
+    apt-get install -y openjdk-17-jdk wget unzip git && \
     apt-get clean
 
 WORKDIR /opt/android
@@ -18,8 +18,6 @@ RUN yes | sdkmanager --licenses && \
 
 WORKDIR /usr/src/app
 COPY package*.json ./
-
-# ✅ Fixed: use npm install (doesn't require package-lock.json)
 RUN npm install --omit=dev
 
 COPY . .
