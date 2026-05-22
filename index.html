@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DeepSeek Agent Chat</title>
+    <style>
+        body { font-family: monospace; background: #1e1e2e; color: #cdd6f4; margin: 0; padding: 20px; }
+        .chat-container { max-width: 800px; margin: 0 auto; background: #313244; border-radius: 12px; overflow: hidden; }
+        .messages { height: 500px; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 12px; }
+        .user-msg { background: #89b4fa; color: #1e1e2e; align-self: flex-end; padding: 10px 15px; border-radius: 18px; max-width: 70%; }
+        .agent-msg { background: #45475a; align-self: flex-start; padding: 10px 15px; border-radius: 18px; max-width: 70%; white-space: pre-wrap; }
+        .input-area { display: flex; border-top: 1px solid #45475a; }
+        input { flex: 1; padding: 15px; border: none; background: #1e1e2e; color: white; font-size: 16px; outline: none; }
+        button { padding: 15px 25px; background: #89b4fa; border: none; color: #1e1e2e; font-weight: bold; cursor: pointer; }
+        button:hover { background: #b4befe; }
+        .status { font-size: 12px; text-align: center; padding: 8px; color: #a6adc8; }
+    </style>
+</head>
+<body>
+<div class="chat-container">
+    <div class="messages" id="messages"></div>
+    <div class="input-area">
+        <input type="text" id="messageInput" placeholder="Ask me to build an APK..." />
+        <button id="sendBtn">Send</button>
+    </div>
+    <div class="status" id="status">Ready</div>
+</div>
+
+<script>
+    const API_URL = 'https://awesome-deepseek-agent-1.onrender.com/chat';
+    // If you set API_SECRET_KEY, uncomment the next line and add your key
+    // const AUTH_TOKEN = 'your-secret-key';
+    let sessionId = localStorage.getItem('sessionId') || crypto.randomUUID();
+    localStorage.setItem('sessionId', sessionId);
+
+    const messagesDiv = document.getElementById('messages');
+    const input = document.getElementById('messageInput');
+    const sendBtn = document.getElementById('sendBtn');
+    const statusDiv = document.getElementById('status');
+
+    function addMessage(text, isUser) {
+        const msgDiv = document.createElement('div');
+        msgDiv.className = isUser ? 'user-msg' : 'agent-msg';
+        msgDiv.textContent = text;
+        messagesDiv.appendChild(msgDiv);
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
+
+    async function sendMessage() {
+        const message = input.value.trim();
+        if (!message) return;
+        addMessage(message, true);
+        input.value = '';
+        statusDiv.textContent = 'Agent is thinking...';
+
+        try {
+            const headers = { 'Content-Type': 'application/json' };
+            // if (AUTH_TOKEN) headers['Authorization'] = `Bearer ${AUTH_TOKEN}`;
+
+            const response = await fetch(API_URL, {
+                method: 'POST',
+                headers: headers,
+                body: JSON.stringify({ message, sessionId })
+            });
+            const data = await response.json();
+            if (data.error) throw new Error(data.error);
+            addMessage(data.reply, false);
+            statusDiv.textContent = 'Ready';
+        } catch (err) {
+            addMessage(`Error: ${err.message}`, false);
+            statusDiv.textContent = 'Error – check console';
+            console.error(err);
+        }
+    }
+
+    sendBtn.addEventListener('click', sendMessage);
+    input.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendMessage(); });
+    addMessage('Hello! I can read/write files, run commands, and build APKs. What would you like me to create?', false);
+</script>
+</body>
+</html>
