@@ -1,7 +1,7 @@
 {
   "name": "deepseek-web-agent",
   "version": "2.0.0",
-  "description": "DeepSeek-powered web API agent with file, shell, and directory tools",
+  "description": "Groq-powered web API agent with file, shell, and directory tools",
   "type": "module",
   "main": "server-api.js",
   "scripts": {
@@ -11,7 +11,7 @@
   "dependencies": {
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
-    "groq": "^0.9.0",
+    "groq": "^0.13.0",
     "node-fetch": "^3.3.2"
   },
   "engines": {
