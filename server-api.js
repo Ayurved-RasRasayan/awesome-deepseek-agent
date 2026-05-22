@@ -1,26 +1,25 @@
 #!/usr/bin/env node
 
 import express from 'express';
-import fetch from 'node-fetch';
 import dotenv from 'dotenv';
 import { readFileSync, writeFileSync, mkdirSync, readdirSync } from 'fs';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import { resolve, dirname } from 'path';
 import crypto from 'crypto';
+import Groq from 'groq-sdk';
 
 dotenv.config();
 
 // ========== Configuration ==========
-const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
-const MODEL = process.env.MODEL || 'deepseek-v4-pro';
-const REASONING_EFFORT = process.env.REASONING_EFFORT || 'max';
+const GROQ_API_KEY = process.env.GROQ_API_KEY;
+const MODEL = process.env.MODEL || 'llama-3.3-70b-versatile'; // Groq model
 const MAX_TOKENS = parseInt(process.env.MAX_TOKENS) || 8192;
 const PORT = process.env.PORT || 3000;
 const API_SECRET_KEY = process.env.API_SECRET_KEY;
 
-if (!DEEPSEEK_API_KEY) {
-  console.error('❌ DEEPSEEK_API_KEY environment variable not set.');
+if (!GROQ_API_KEY) {
+  console.error('❌ GROQ_API_KEY environment variable not set.');
   process.exit(1);
 }
 
@@ -29,7 +28,7 @@ const execAsync = promisify(exec);
 // ========== In-memory session store ==========
 const sessions = new Map();
 
-// ========== Tool definitions ==========
+// ========== Tool definitions (same as before) ==========
 const tools = [
   {
     type: 'function',
@@ -150,8 +149,10 @@ async function callTool(name, args) {
   }
 }
 
-// ========== DeepSeek API wrapper ==========
-async function callDeepSeek(messages, toolsEnabled = true) {
+// ========== Groq API wrapper ==========
+const groq = new Groq({ apiKey: GROQ_API_KEY });
+
+async function callGroq(messages, toolsEnabled = true) {
   const requestBody = {
     model: MODEL,
     messages: messages,
@@ -160,31 +161,13 @@ async function callDeepSeek(messages, toolsEnabled = true) {
     stream: false
   };
 
-  if (REASONING_EFFORT && (MODEL.includes('deepseek-v4-pro') || MODEL.includes('deepseek-v4'))) {
-    requestBody.reasoning_effort = REASONING_EFFORT;
-  }
-
-  if (toolsEnabled) {
+  if (toolsEnabled && tools.length > 0) {
     requestBody.tools = tools;
     requestBody.tool_choice = 'auto';
   }
 
-  const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${DEEPSEEK_API_KEY}`
-    },
-    body: JSON.stringify(requestBody)
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`DeepSeek API error (${response.status}): ${errorText}`);
-  }
-
-  const data = await response.json();
-  return data.choices[0].message;
+  const response = await groq.chat.completions.create(requestBody);
+  return response.choices[0].message;
 }
 
 // ========== Agent turn ==========
@@ -198,7 +181,7 @@ async function runAgentTurn(sessionId, userMessage) {
 - Execute shell commands (run_command)
 - List directory contents (list_directory)
 
-You have a 1M token context window and can reason deeply (${REASONING_EFFORT} effort).
+You have a large context window and can use tools effectively.
 Always think step-by-step. When you need to perform an action, call the appropriate tool.
 After each tool call, you will receive the result. Continue until the user's request is fully satisfied.
 Be concise but thorough. Use the tools efficiently.`
@@ -218,7 +201,7 @@ Be concise but thorough. Use the tools efficiently.`
   while (loopCount < maxLoops) {
     loopCount++;
     try {
-      const assistantMsg = await callDeepSeek(session.messages, true);
+      const assistantMsg = await callGroq(session.messages, true);
       session.messages.push(assistantMsg);
 
       if (assistantMsg.tool_calls && assistantMsg.tool_calls.length > 0) {
@@ -256,7 +239,7 @@ Be concise but thorough. Use the tools efficiently.`
 const app = express();
 app.use(express.json({ limit: '10mb' }));
 
-// Auth middleware (unchanged)
+// Auth middleware
 function authMiddleware(req, res, next) {
   if (!API_SECRET_KEY) return next();
   const authHeader = req.headers.authorization;
@@ -270,13 +253,13 @@ function authMiddleware(req, res, next) {
   next();
 }
 
-// ========== Chat HTML (injected with API_SECRET_KEY from environment) ==========
+// ========== Embedded chat interface ==========
 const chatHTML = `<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DeepSeek APK Builder</title>
+    <title>Groq APK Builder</title>
     <style>
         body {
             background: #0a0a0a;
@@ -384,7 +367,7 @@ const chatHTML = `<!DOCTYPE html>
 <body>
     <div class="chat-window">
         <div class="chat-header">
-            🤖 DeepSeek APK Builder — v4 Pro (max reasoning)
+            🤖 Groq APK Builder — Llama 3.3 70B
         </div>
         <div class="messages" id="messages">
             <div class="message agent-message">✅ Agent ready. I can read/write files, run commands, and build Android projects.<br><br>Give me a task like:<br>📱 "Generate a full Android Kotlin project with a simple 'Hello World' app and compile an APK."</div>
@@ -397,8 +380,6 @@ const chatHTML = `<!DOCTYPE html>
     </div>
 
     <script>
-        const API_URL = window.location.origin + '/chat';
-        // API secret automatically injected from server environment
         const API_SECRET = '${API_SECRET_KEY || ''}';
         let sessionId = localStorage.getItem('agentSessionId');
         if (!sessionId) {
@@ -434,14 +415,14 @@ const chatHTML = `<!DOCTYPE html>
             if (API_SECRET) headers['Authorization'] = \`Bearer \${API_SECRET}\`;
             
             try {
-                const response = await fetch(API_URL, {
+                const response = await fetch('/chat', {
                     method: 'POST',
                     headers: headers,
                     body: JSON.stringify({ message: text, sessionId: sessionId })
                 });
                 if (!response.ok) throw new Error(\`HTTP \${response.status}\`);
                 const data = await response.json();
-                if (data.error) throw new Error(data.error);
+                if (data.error) throw new Error(data.reply || 'Unknown error');
                 addMessage(data.reply, false);
                 setStatus('Ready');
             } catch (err) {
@@ -469,14 +450,14 @@ app.get('/', (req, res) => {
 
 // Health check
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', model: MODEL, reasoning: REASONING_EFFORT });
+  res.json({ status: 'ok', model: MODEL, provider: 'Groq' });
 });
 
 // Chat endpoint
 app.post('/chat', authMiddleware, async (req, res) => {
   const { message, sessionId } = req.body;
   if (!message || typeof message !== 'string') {
-    return res.status(400).json({ error: 'message is required and must be a string' });
+    return res.status(400).json({ error: true, reply: 'message is required and must be a string' });
   }
   const effectiveSessionId = sessionId || crypto.randomUUID();
   try {
@@ -484,7 +465,7 @@ app.post('/chat', authMiddleware, async (req, res) => {
     res.json({ sessionId: effectiveSessionId, reply: finalAnswer, error: error || false });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Internal server error', details: err.message });
+    res.json({ sessionId: effectiveSessionId, reply: `Server error: ${err.message}`, error: true });
   }
 });
 
@@ -510,8 +491,7 @@ app.get('/sessions', authMiddleware, (req, res) => {
 
 // Start server
 app.listen(PORT, () => {
-  console.log(`🚀 DeepSeek Web Agent API running on port ${PORT}`);
+  console.log(`🚀 Groq Web Agent API running on port ${PORT}`);
   console.log(`   Model: ${MODEL}`);
-  console.log(`   Reasoning: ${REASONING_EFFORT}`);
   console.log(`   Auth: ${API_SECRET_KEY ? 'enabled' : 'disabled (warning!)'}`);
 });
