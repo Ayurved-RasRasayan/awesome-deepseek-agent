@@ -19,7 +19,7 @@ RUN yes | sdkmanager --licenses && \
 WORKDIR /usr/src/app
 COPY package*.json ./
 
-# FIXED: Use npm install instead of npm ci
+# ✅ Fixed: use npm install (doesn't require package-lock.json)
 RUN npm install --omit=dev
 
 COPY . .
