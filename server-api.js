@@ -29,7 +29,7 @@ const execAsync = promisify(exec);
 // ========== In-memory session store ==========
 const sessions = new Map();
 
-// ========== Tool definitions (same as before) ==========
+// ========== Tool definitions ==========
 const tools = [
   {
     type: 'function',
@@ -270,7 +270,7 @@ function authMiddleware(req, res, next) {
   next();
 }
 
-// ========== NEW: Serve the chat interface at root (/) ==========
+// ========== Chat HTML (injected with API_SECRET_KEY from environment) ==========
 const chatHTML = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -398,7 +398,8 @@ const chatHTML = `<!DOCTYPE html>
 
     <script>
         const API_URL = window.location.origin + '/chat';
-        const API_SECRET = '';  // leave empty if you didn't set API_SECRET_KEY on Render
+        // API secret automatically injected from server environment
+        const API_SECRET = '${API_SECRET_KEY || ''}';
         let sessionId = localStorage.getItem('agentSessionId');
         if (!sessionId) {
             sessionId = crypto.randomUUID();
@@ -466,12 +467,12 @@ app.get('/', (req, res) => {
   res.send(chatHTML);
 });
 
-// Health check (unchanged)
+// Health check
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', model: MODEL, reasoning: REASONING_EFFORT });
 });
 
-// Chat endpoint (unchanged)
+// Chat endpoint
 app.post('/chat', authMiddleware, async (req, res) => {
   const { message, sessionId } = req.body;
   if (!message || typeof message !== 'string') {
@@ -487,7 +488,7 @@ app.post('/chat', authMiddleware, async (req, res) => {
   }
 });
 
-// Clear session (unchanged)
+// Clear session
 app.delete('/session/:sessionId', authMiddleware, (req, res) => {
   const { sessionId } = req.params;
   if (sessions.delete(sessionId)) {
@@ -497,7 +498,7 @@ app.delete('/session/:sessionId', authMiddleware, (req, res) => {
   }
 });
 
-// List sessions (unchanged)
+// List sessions
 app.get('/sessions', authMiddleware, (req, res) => {
   const sessionList = Array.from(sessions.keys()).map(id => ({
     id,
