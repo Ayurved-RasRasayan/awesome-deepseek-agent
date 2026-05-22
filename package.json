@@ -1,0 +1,21 @@
+{
+  "name": "deepseek-terminal-agent",
+  "version": "1.0.0",
+  "description": "Full-featured terminal AI agent powered by DeepSeek V4",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "keywords": ["deepseek", "ai-agent", "terminal", "cli", "coding-assistant"],
+  "author": "Your Name",
+  "license": "MIT",
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "node-fetch": "^3.3.2"
+  },
+  "engines": {
+    "node": ">=20.10.0"
+  }
+}
